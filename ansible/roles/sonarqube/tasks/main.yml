@@ -76,15 +76,15 @@
       --restart always \
       --network traefik-net \
       -p 9000:9000 \
-      --memory="768m" \
-      --memory-swap="1536m" \
+      --memory="1536m" \
+      --memory-swap="3g" \
       -v /opt/sonarqube/data:/opt/sonarqube/data \
       -v /opt/sonarqube/logs:/opt/sonarqube/logs \
       -v /opt/sonarqube/extensions:/opt/sonarqube/extensions \
       -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
-      -e SONAR_CE_JAVAOPTS="-Xmx256m -Xms128m" \
-      -e SONAR_WEB_JAVAOPTS="-Xmx256m -Xms128m" \
-      -e SONAR_SEARCH_JAVAOPTS="-Xmx256m -Xms256m -XX:MaxDirectMemorySize=64m" \
+      -e SONAR_CE_JAVAOPTS="-Xmx384m -Xms128m" \
+      -e SONAR_WEB_JAVAOPTS="-Xmx384m -Xms128m" \
+      -e SONAR_SEARCH_JAVAOPTS="-Xmx512m -Xms256m -XX:MaxDirectMemorySize=64m" \
       --label "traefik.enable=true" \
       --label "traefik.http.routers.sonarqube.rule=Host(\`sonarqube.{{ domain_name }}\`)" \
       --label "traefik.http.routers.sonarqube.entrypoints=websecure" \

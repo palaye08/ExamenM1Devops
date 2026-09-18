@@ -72,18 +72,33 @@ jobs:
 
       - name: Attendre que SonarQube soit prêt (status UP)
         run: |
-          echo "Vérification du statut de SonarQube à l'adresse : ${{ secrets.SONAR_HOST_URL }}/api/system/status"
-          timeout 300 bash -c '
-          while true; do
-            STATUS=$(curl -s ${{ secrets.SONAR_HOST_URL }}/api/system/status | grep -o "\"status\":\"[^\"]*\"" | cut -d\" -f4)
+          SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
+          echo "🔍 URL SonarQube interrogée : ${SONAR_URL}"
+          echo "🔍 Endpoint complet : ${SONAR_URL}/api/system/status"
+          echo "---"
+          MAX_ATTEMPTS=20
+          SLEEP_INTERVAL=15
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            HTTP_CODE=$(curl -s -o /tmp/sonar_response.json -w "%{http_code}" -m 10 "${SONAR_URL}/api/system/status" 2>/dev/null || echo "000")
+            BODY=$(cat /tmp/sonar_response.json 2>/dev/null || echo "")
+            STATUS=$(echo "$BODY" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "")
+            
+            echo "[Tentative ${ATTEMPT}/${MAX_ATTEMPTS}] HTTP=${HTTP_CODE} | Status=${STATUS:-INCONNU} | Body=${BODY:-vide}"
+            
             if [ "$STATUS" = "UP" ]; then
               echo "✅ SonarQube est prêt !"
-              break
+              exit 0
             fi
-            echo "⏳ SonarQube est en statut: ${STATUS:-INCONNU}. Nouvelle tentative dans 10 secondes..."
-            sleep 10
+            
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "⏳ Prochaine tentative dans ${SLEEP_INTERVAL}s..."
+              sleep $SLEEP_INTERVAL
+            fi
           done
-          '
+          echo "❌ SonarQube n'est pas devenu UP après ${MAX_ATTEMPTS} tentatives ($(( MAX_ATTEMPTS * SLEEP_INTERVAL ))s)"
+          exit 1
 
       - name: Analyse SonarQube
         run: |
