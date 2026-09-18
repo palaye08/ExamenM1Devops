@@ -161,8 +161,8 @@ jobs:
       - name: Déploiement SSH sur l'instance prod
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          host: "52.8.34.134"
+          username: "ec2-user"
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Pull de la nouvelle image
