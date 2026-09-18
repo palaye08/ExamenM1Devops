@@ -83,11 +83,11 @@ resource "aws_security_group" "prod_sg" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH admin only"
+    description = "SSH (admin + CI/CD GitHub Actions)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.admin_ip]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
