@@ -17,7 +17,7 @@ public class HealthController {
     @GetMapping("/hello")
     public Map<String, String> hello() {
         return Map.of(
-            "message", "Application TP DevOps Exam - déployée avec succès ok !",
+            "message", "Application TP DevOps Exam - déployée avec succès o!",
             "status", "UP"
         );
     }
