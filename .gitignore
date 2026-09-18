@@ -1,0 +1,33 @@
+# ── Fichiers sensibles (à ne jamais committer) ──
+terraform/terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Clés SSH
+*.pem
+*.key
+
+# Variables Ansible non chiffrées
+# (vault.yml doit être chiffré avec ansible-vault avant de commit)
+ansible/group_vars/all/vault.yml
+
+# Build Java
+target/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/

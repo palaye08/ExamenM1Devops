@@ -1,0 +1,146 @@
+---
+# Rôle "monitoring" : Prometheus (collecte métriques) + Grafana (visualisation).
+# Prometheus est accessible sur le port 9090.
+# Grafana est accessible sur le port 3000 ET via https://grafana.{{ domain_name }}
+#
+# Pour visualiser les métriques de votre instance sur le port 3000 :
+# -> http://VOTRE_IP_EC2:3000  (login: admin / vault_grafana_admin_password)
+# -> Ajouter Prometheus comme datasource : http://prometheus:9090
+# -> Importer le dashboard "Node Exporter Full" (ID: 1860) depuis grafana.com
+
+- name: Créer les répertoires Prometheus
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "65534"   # nobody (UID Prometheus)
+    group: "65534"
+    mode: "0755"
+  loop:
+    - /opt/prometheus
+    - /opt/prometheus/data
+  become: true
+
+- name: Déployer la configuration Prometheus (prometheus.yml)
+  ansible.builtin.copy:
+    dest: /opt/prometheus/prometheus.yml
+    owner: "65534"
+    group: "65534"
+    mode: "0644"
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        # Métriques de Prometheus lui-même
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+
+        # Métriques système de l'instance EC2 (via Node Exporter)
+        - job_name: 'node-exporter'
+          static_configs:
+            - targets: ['node-exporter:9100']
+
+        # Métriques de l'application (Spring Boot Actuator / /actuator/prometheus)
+        - job_name: 'app'
+          metrics_path: '/actuator/prometheus'
+          static_configs:
+            - targets: ['app:8080']
+
+        # Métriques SonarQube
+        - job_name: 'sonarqube'
+          static_configs:
+            - targets: ['sonarqube:9000']
+  become: true
+
+- name: Créer le répertoire Grafana
+  ansible.builtin.file:
+    path: /opt/grafana/data
+    state: directory
+    owner: "472"   # UID Grafana
+    group: "472"
+    mode: "0755"
+  become: true
+
+- name: Lancer Node Exporter (métriques système de l'instance)
+  ansible.builtin.shell: |
+    docker stop node-exporter 2>/dev/null || true
+    docker rm node-exporter 2>/dev/null || true
+    docker run -d \
+      --name node-exporter \
+      --restart always \
+      --network traefik-net \
+      -p 9100:9100 \
+      --pid="host" \
+      -v /proc:/host/proc:ro \
+      -v /sys:/host/sys:ro \
+      -v /:/rootfs:ro \
+      prom/node-exporter:latest \
+      --path.procfs=/host/proc \
+      --path.rootfs=/rootfs \
+      --path.sysfs=/host/sys \
+      --collector.filesystem.mount-points-exclude='^/(sys|proc|dev|host|etc)($$|/)'
+  become: true
+
+- name: Lancer Prometheus
+  ansible.builtin.shell: |
+    docker stop prometheus 2>/dev/null || true
+    docker rm prometheus 2>/dev/null || true
+    docker run -d \
+      --name prometheus \
+      --restart always \
+      --network traefik-net \
+      -p 9090:9090 \
+      -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro \
+      -v /opt/prometheus/data:/prometheus \
+      prom/prometheus:latest \
+      --config.file=/etc/prometheus/prometheus.yml \
+      --storage.tsdb.path=/prometheus \
+      --web.console.libraries=/etc/prometheus/console_libraries \
+      --web.console.templates=/etc/prometheus/consoles \
+      --web.enable-lifecycle
+  become: true
+
+- name: Lancer Grafana (visualisation des métriques - port 3000)
+  ansible.builtin.shell: |
+    docker stop grafana 2>/dev/null || true
+    docker rm grafana 2>/dev/null || true
+    docker run -d \
+      --name grafana \
+      --restart always \
+      --network traefik-net \
+      -p 3000:3000 \
+      -v /opt/grafana/data:/var/lib/grafana \
+      -e GF_SECURITY_ADMIN_USER="{{ grafana_admin_user }}" \
+      -e GF_SECURITY_ADMIN_PASSWORD="{{ vault_grafana_admin_password }}" \
+      -e GF_SERVER_DOMAIN="grafana.{{ domain_name }}" \
+      -e GF_SERVER_ROOT_URL="https://grafana.{{ domain_name }}" \
+      --label "traefik.enable=true" \
+      --label "traefik.http.routers.grafana.rule=Host(\`grafana.{{ domain_name }}\`)" \
+      --label "traefik.http.routers.grafana.entrypoints=websecure" \
+      --label "traefik.http.routers.grafana.tls.certresolver=letsencrypt" \
+      --label "traefik.http.services.grafana.loadbalancer.server.port=3000" \
+      grafana/grafana:latest
+  become: true
+
+- name: Vérifier que Prometheus est démarré
+  ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' prometheus
+  register: prom_status
+  changed_when: false
+
+- name: Vérifier que Grafana est démarré
+  ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' grafana
+  register: grafana_status
+  changed_when: false
+
+- name: Afficher les statuts monitoring
+  ansible.builtin.debug:
+    msg: |
+      Prometheus running: {{ prom_status.stdout }}
+        -> http://{{ ansible_host }}:9090
+      Grafana running: {{ grafana_status.stdout }}
+        -> http://{{ ansible_host }}:3000 (port direct)
+        -> https://grafana.{{ domain_name }} (via Traefik + HTTPS)
+      Identifiants Grafana : {{ grafana_admin_user }} / [voir vault.yml]
+      Dashboard recommandé : Import ID 1860 (Node Exporter Full)

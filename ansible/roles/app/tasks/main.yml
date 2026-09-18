@@ -1,0 +1,43 @@
+---
+# Rôle "app" : déploiement de l'application sur l'instance prod.
+# L'image Docker est construite et poussée par le CI/CD (GitHub Actions).
+# Accessible via : https://app.{{ domain_name }}
+
+- name: Pull de la dernière image de l'application
+  ansible.builtin.command: "docker pull {{ app_image }}"
+  become: true
+
+- name: Arrêter et supprimer l'ancien conteneur applicatif
+  ansible.builtin.shell: |
+    docker stop app 2>/dev/null || true
+    docker rm app 2>/dev/null || true
+  become: true
+
+- name: Lancer le conteneur applicatif
+  ansible.builtin.shell: |
+    docker run -d \
+      --name app \
+      --restart always \
+      --network traefik-net \
+      -p {{ app_port }}:8080 \
+      -e MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE="health,info,prometheus,metrics" \
+      -e MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS="always" \
+      --label "traefik.enable=true" \
+      --label "traefik.http.routers.app.rule=Host(\`app.{{ domain_name }}\`)" \
+      --label "traefik.http.routers.app.entrypoints=websecure" \
+      --label "traefik.http.routers.app.tls.certresolver=letsencrypt" \
+      --label "traefik.http.services.app.loadbalancer.server.port=8080" \
+      {{ app_image }}
+  become: true
+
+- name: Vérifier que l'application est démarrée
+  ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' app
+  register: app_status
+  changed_when: false
+
+- name: Afficher le statut de l'application
+  ansible.builtin.debug:
+    msg: |
+      Application running: {{ app_status.stdout }}
+        -> http://{{ ansible_host }}:{{ app_port }}
+        -> https://app.{{ domain_name }} (via Traefik + HTTPS)

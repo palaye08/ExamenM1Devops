@@ -1,0 +1,104 @@
+---
+# Rôle "traefik" : reverse proxy avec Let's Encrypt (HTTPS automatique).
+# Traefik écoute sur les ports 80 et 443 et route le trafic vers :
+#   - grafana.domaine.com   -> Grafana (port 3000)
+#   - sonarqube.domaine.com -> SonarQube (port 9000)
+#   - app.domaine.com       -> Application (port 8080)
+
+- name: Créer le réseau Docker 'traefik-net' (partagé par tous les conteneurs)
+  ansible.builtin.command: docker network create traefik-net
+  ignore_errors: true  # Idempotent : ne pas échouer si le réseau existe déjà
+  become: true
+
+- name: Créer le répertoire de configuration Traefik
+  ansible.builtin.file:
+    path: /opt/traefik
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Créer le répertoire pour les certificats Let's Encrypt
+  ansible.builtin.file:
+    path: /opt/traefik/letsencrypt
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Créer le fichier acme.json (stockage des certificats)
+  ansible.builtin.file:
+    path: /opt/traefik/letsencrypt/acme.json
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+
+- name: Déployer la configuration statique Traefik (traefik.yml)
+  ansible.builtin.copy:
+    dest: /opt/traefik/traefik.yml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Configuration statique Traefik
+      api:
+        dashboard: true
+        insecure: true   # Dashboard accessible sur le port 8081 (usage interne)
+
+      entryPoints:
+        web:
+          address: ":80"
+          http:
+            redirections:
+              entryPoint:
+                to: websecure
+                scheme: https
+        websecure:
+          address: ":443"
+
+      providers:
+        docker:
+          exposedByDefault: false
+          network: traefik-net
+
+      certificatesResolvers:
+        letsencrypt:
+          acme:
+            email: "{{ acme_email }}"
+            storage: /letsencrypt/acme.json
+            httpChallenge:
+              entryPoint: web
+
+      log:
+        level: INFO
+  become: true
+
+- name: Lancer le conteneur Traefik
+  ansible.builtin.shell: |
+    docker stop traefik 2>/dev/null || true
+    docker rm traefik 2>/dev/null || true
+    docker run -d \
+      --name traefik \
+      --restart always \
+      --network traefik-net \
+      -p 80:80 \
+      -p 443:443 \
+      -p 8081:8080 \
+      -v /opt/traefik/traefik.yml:/traefik.yml:ro \
+      -v /opt/traefik/letsencrypt:/letsencrypt \
+      -v /var/run/docker.sock:/var/run/docker.sock:ro \
+      traefik:v3.0
+  become: true
+
+- name: Vérifier que Traefik est démarré
+  ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' traefik
+  register: traefik_status
+  changed_when: false
+
+- name: Afficher le statut de Traefik
+  ansible.builtin.debug:
+    msg: "Traefik running: {{ traefik_status.stdout }}"

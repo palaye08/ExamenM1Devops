@@ -1,0 +1,66 @@
+---
+# Rôle "sonarqube" : analyse statique de la qualité du code.
+# Accessible via : https://sonarqube.{{ domain_name }}
+# PRÉREQUIS SYSTÈME : vm.max_map_count >= 262144 (nécessaire pour Elasticsearch)
+
+- name: Configurer vm.max_map_count pour Elasticsearch (SonarQube)
+  ansible.builtin.sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    state: present
+    reload: true
+  become: true
+
+- name: Configurer fs.file-max pour SonarQube
+  ansible.builtin.sysctl:
+    name: fs.file-max
+    value: "65536"
+    state: present
+    reload: true
+  become: true
+
+- name: Créer le répertoire de données SonarQube
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0755"
+  loop:
+    - /opt/sonarqube/data
+    - /opt/sonarqube/logs
+    - /opt/sonarqube/extensions
+  become: true
+
+- name: Lancer le conteneur SonarQube Community
+  ansible.builtin.shell: |
+    docker stop sonarqube 2>/dev/null || true
+    docker rm sonarqube 2>/dev/null || true
+    docker run -d \
+      --name sonarqube \
+      --restart always \
+      --network traefik-net \
+      -p 9000:9000 \
+      -v /opt/sonarqube/data:/opt/sonarqube/data \
+      -v /opt/sonarqube/logs:/opt/sonarqube/logs \
+      -v /opt/sonarqube/extensions:/opt/sonarqube/extensions \
+      -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+      --label "traefik.enable=true" \
+      --label "traefik.http.routers.sonarqube.rule=Host(\`sonarqube.{{ domain_name }}\`)" \
+      --label "traefik.http.routers.sonarqube.entrypoints=websecure" \
+      --label "traefik.http.routers.sonarqube.tls.certresolver=letsencrypt" \
+      --label "traefik.http.services.sonarqube.loadbalancer.server.port=9000" \
+      sonarqube:community
+  become: true
+
+- name: Vérifier que SonarQube est démarré
+  ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' sonarqube
+  register: sonar_status
+  changed_when: false
+
+- name: Afficher le statut de SonarQube
+  ansible.builtin.debug:
+    msg: |
+      SonarQube running: {{ sonar_status.stdout }}
+      Accès direct : http://{{ ansible_host }}:9000 (admin/admin par défaut)
+      Accès domaine : https://sonarqube.{{ domain_name }}

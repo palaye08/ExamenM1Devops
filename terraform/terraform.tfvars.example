@@ -1,0 +1,13 @@
+# Copier ce fichier en terraform.tfvars et adapter les valeurs.
+# NE JAMAIS committer terraform.tfvars (exclu par .gitignore).
+
+aws_region      = "us-east-1"
+availability_zone = "us-east-1a"
+admin_ip        = "VOTRE_IP/32"
+key_pair_name   = "exam-key"
+public_key_path = "~/.ssh/id_rsa.pub"
+project_name    = "exam-prod"
+instance_type   = "t2.micro"
+app_image       = "VOTRE_DOCKERHUB_USERNAME/tp-devops-exam:latest"
+domain_name     = "votredomaine.com"
+acme_email      = "votre@email.com"

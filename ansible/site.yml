@@ -1,0 +1,39 @@
+---
+# Playbook principal - Exam DevOps
+# Configure une seule instance EC2 prod avec :
+# Docker, Traefik, SonarQube, Prometheus, Grafana + Application
+
+# Étape 1 : Configuration commune (update + Docker)
+- name: Configuration commune - mise à jour système et installation Docker
+  hosts: prod
+  become: true
+  roles:
+    - common
+
+# Étape 2 : Déploiement de Traefik (reverse proxy + TLS)
+- name: Déploiement Traefik (reverse proxy + Let's Encrypt)
+  hosts: prod
+  become: true
+  roles:
+    - traefik
+
+# Étape 3 : Déploiement SonarQube
+- name: Déploiement SonarQube (analyse qualité du code)
+  hosts: prod
+  become: true
+  roles:
+    - sonarqube
+
+# Étape 4 : Déploiement Prometheus + Grafana (monitoring)
+- name: Déploiement Prometheus et Grafana (monitoring)
+  hosts: prod
+  become: true
+  roles:
+    - monitoring
+
+# Étape 5 : Déploiement de l'application
+- name: Déploiement de l'application
+  hosts: prod
+  become: true
+  roles:
+    - app

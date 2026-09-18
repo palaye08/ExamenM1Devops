@@ -1,0 +1,61 @@
+---
+# Rôle "common" : appliqué à l'instance prod.
+# Met à jour le système et installe Docker (moteur pour tous les conteneurs).
+
+- name: Mettre à jour tous les paquets (dnf update)
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: true
+  become: true
+
+- name: Installer les dépendances système
+  ansible.builtin.dnf:
+    name:
+      - python3
+      - python3-pip
+      - curl
+      - wget
+      - git
+      - unzip
+    state: present
+  become: true
+
+- name: Installer Docker
+  ansible.builtin.dnf:
+    name: docker
+    state: present
+  become: true
+
+- name: Démarrer et activer le service Docker
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  become: true
+
+- name: Ajouter ec2-user au groupe docker
+  ansible.builtin.user:
+    name: ec2-user
+    groups: docker
+    append: true
+  become: true
+
+- name: Installer Docker Compose (plugin v2)
+  ansible.builtin.shell: |
+    mkdir -p /usr/local/lib/docker/cli-plugins
+    curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+  args:
+    creates: /usr/local/lib/docker/cli-plugins/docker-compose
+  become: true
+
+- name: Vérifier l'installation de Docker Compose
+  ansible.builtin.command: docker compose version
+  register: compose_version
+  changed_when: false
+
+- name: Afficher la version de Docker Compose
+  ansible.builtin.debug:
+    msg: "{{ compose_version.stdout }}"
