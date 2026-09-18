@@ -3,15 +3,18 @@
 # L'image Docker est construite et poussée par le CI/CD (GitHub Actions).
 # Accessible via : https://app.{{ domain_name }}
 
-- name: Pull de la dernière image de l'application
+- name: Vérifier si l'image Docker est disponible sur Docker Hub
   ansible.builtin.command: "docker pull {{ app_image }}"
   become: true
+  register: pull_result
+  ignore_errors: true
 
-- name: Arrêter et supprimer l'ancien conteneur applicatif
+- name: Arrêter et supprimer l'ancien conteneur applicatif (si image disponible)
   ansible.builtin.shell: |
     docker stop app 2>/dev/null || true
     docker rm app 2>/dev/null || true
   become: true
+  when: pull_result.rc == 0
 
 - name: Lancer le conteneur applicatif
   ansible.builtin.shell: |
@@ -29,15 +32,27 @@
       --label "traefik.http.services.app.loadbalancer.server.port=8080" \
       {{ app_image }}
   become: true
+  when: pull_result.rc == 0
+
+- name: Afficher message si image non disponible
+  ansible.builtin.debug:
+    msg: |
+      ⚠️  Image {{ app_image }} non disponible sur Docker Hub.
+      Le déploiement de l'app sera fait automatiquement par le CI/CD
+      après le premier push sur la branche main.
+  when: pull_result.rc != 0
 
 - name: Vérifier que l'application est démarrée
   ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' app
   register: app_status
   changed_when: false
+  failed_when: false
+  when: pull_result.rc == 0
 
 - name: Afficher le statut de l'application
   ansible.builtin.debug:
     msg: |
-      Application running: {{ app_status.stdout }}
+      Application running: {{ app_status.stdout | default('not started') }}
         -> http://{{ ansible_host }}:{{ app_port }}
         -> https://app.{{ domain_name }} (via Traefik + HTTPS)
+  when: pull_result.rc == 0

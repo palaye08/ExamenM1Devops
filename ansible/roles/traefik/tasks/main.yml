@@ -6,9 +6,10 @@
 #   - app.domaine.com       -> Application (port 8080)
 
 - name: Créer le réseau Docker 'traefik-net' (partagé par tous les conteneurs)
-  ansible.builtin.command: docker network create traefik-net
-  ignore_errors: true  # Idempotent : ne pas échouer si le réseau existe déjà
+  ansible.builtin.shell: |
+    docker network inspect traefik-net >/dev/null 2>&1 || docker network create traefik-net
   become: true
+  changed_when: false
 
 - name: Créer le répertoire de configuration Traefik
   ansible.builtin.file:
