@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "Région AWS où déployer l'infrastructure"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 variable "vpc_cidr" {
@@ -19,7 +19,7 @@ variable "public_subnet_cidr" {
 variable "availability_zone" {
   description = "Zone de disponibilité"
   type        = string
-  default     = "us-east-1a"
+  default     = "us-west-1a"
 }
 
 variable "instance_type" {
