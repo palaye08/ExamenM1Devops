@@ -70,6 +70,21 @@ jobs:
           distribution: "corretto"
           cache: maven
 
+      - name: Attendre que SonarQube soit prêt (status UP)
+        run: |
+          echo "Vérification du statut de SonarQube à l'adresse : ${{ secrets.SONAR_HOST_URL }}/api/system/status"
+          timeout 300 bash -c '
+          while true; do
+            STATUS=$(curl -s ${{ secrets.SONAR_HOST_URL }}/api/system/status | grep -o "\"status\":\"[^\"]*\"" | cut -d\" -f4)
+            if [ "$STATUS" = "UP" ]; then
+              echo "✅ SonarQube est prêt !"
+              break
+            fi
+            echo "⏳ SonarQube est en statut: ${STATUS:-INCONNU}. Nouvelle tentative dans 10 secondes..."
+            sleep 10
+          done
+          '
+
       - name: Analyse SonarQube
         run: |
           mvn verify sonar:sonar \

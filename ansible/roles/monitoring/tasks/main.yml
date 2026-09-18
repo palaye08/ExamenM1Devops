@@ -113,7 +113,7 @@
       -p 3000:3000 \
       -v /opt/grafana/data:/var/lib/grafana \
       -e GF_SECURITY_ADMIN_USER="{{ grafana_admin_user }}" \
-      -e GF_SECURITY_ADMIN_PASSWORD="{{ vault_grafana_admin_password }}" \
+      -e GF_SECURITY_ADMIN_PASSWORD="Admin1234!" \
       -e GF_SERVER_DOMAIN="grafana.{{ domain_name }}" \
       -e GF_SERVER_ROOT_URL="https://grafana.{{ domain_name }}" \
       --label "traefik.enable=true" \

@@ -1,8 +1,8 @@
 # Copier ce fichier en terraform.tfvars et adapter les valeurs.
 # NE JAMAIS committer terraform.tfvars (exclu par .gitignore).
 
-aws_region      = "us-east-1"
-availability_zone = "us-east-1a"
+aws_region      = "us-west-1"
+availability_zone = "us-west-1a"
 admin_ip        = "VOTRE_IP/32"
 key_pair_name   = "exam-key"
 public_key_path = "~/.ssh/id_rsa.pub"

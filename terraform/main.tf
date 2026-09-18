@@ -190,7 +190,7 @@ resource "aws_instance" "prod" {
 
   # Augmenter le stockage pour SonarQube + Grafana + Prometheus
   root_block_device {
-    volume_size = 20
+    volume_size = var.root_volume_size
     volume_type = "gp3"
   }
 

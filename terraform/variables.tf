@@ -23,9 +23,15 @@ variable "availability_zone" {
 }
 
 variable "instance_type" {
-  description = "Type d'instance EC2 (t2.micro pour l'exam)"
+  description = "Type d'instance EC2 (t3.small pour l'exam)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
+}
+
+variable "root_volume_size" {
+  description = "Taille du disque EBS racine en Go"
+  type        = number
+  default     = 30
 }
 
 variable "admin_ip" {

@@ -32,6 +32,41 @@
     - /opt/sonarqube/extensions
   become: true
 
+- name: Vérifier et créer le fichier swap ({{ swap_size_gb | default(4) }}Go par défaut)
+  ansible.builtin.shell:
+    cmd: |
+      SWAP_SIZE="{{ swap_size_gb | default(4) }}G"
+      
+      # Si on veut un swap plus grand et propre, on utilise un seul gros swapfile.
+      if [ ! -f /swapfile ]; then
+        fallocate -l $SWAP_SIZE /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=$(( {{ swap_size_gb | default(4) }} * 1024 ))
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+      else
+        # Vérifie si le swap actuel est suffisant
+        CURRENT_SWAP=$(du -BG /swapfile | awk '{print $1}' | sed 's/G//')
+        if [ "$CURRENT_SWAP" -lt "{{ swap_size_gb | default(4) }}" ]; then
+          # On crée un swap supplémentaire
+          if [ ! -f /swapfile_extra ]; then
+            EXTRA_SIZE=$(( {{ swap_size_gb | default(4) }} - CURRENT_SWAP ))
+            fallocate -l ${EXTRA_SIZE}G /swapfile_extra || dd if=/dev/zero of=/swapfile_extra bs=1M count=$(( EXTRA_SIZE * 1024 ))
+            chmod 600 /swapfile_extra
+            mkswap /swapfile_extra
+            swapon /swapfile_extra
+          fi
+        fi
+      fi
+      
+      # S'assurer que tous les swapfiles existants sont montés sans causer d'erreur
+      for f in /swapfile /swapfile_extra /swapfile2; do
+        if [ -f "$f" ]; then
+          swapon -s | grep -q "$f " || swapon "$f" || true
+        fi
+      done
+  become: true
+  changed_when: false
+
 - name: Lancer le conteneur SonarQube Community
   ansible.builtin.shell: |
     docker stop sonarqube 2>/dev/null || true
@@ -41,10 +76,15 @@
       --restart always \
       --network traefik-net \
       -p 9000:9000 \
+      --memory="768m" \
+      --memory-swap="1536m" \
       -v /opt/sonarqube/data:/opt/sonarqube/data \
       -v /opt/sonarqube/logs:/opt/sonarqube/logs \
       -v /opt/sonarqube/extensions:/opt/sonarqube/extensions \
       -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+      -e SONAR_CE_JAVAOPTS="-Xmx256m -Xms128m" \
+      -e SONAR_WEB_JAVAOPTS="-Xmx256m -Xms128m" \
+      -e SONAR_SEARCH_JAVAOPTS="-Xmx256m -Xms256m -XX:MaxDirectMemorySize=64m" \
       --label "traefik.enable=true" \
       --label "traefik.http.routers.sonarqube.rule=Host(\`sonarqube.{{ domain_name }}\`)" \
       --label "traefik.http.routers.sonarqube.entrypoints=websecure" \
