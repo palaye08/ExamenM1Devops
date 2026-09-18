@@ -63,10 +63,10 @@ jobs:
         with:
           fetch-depth: 0  # Nécessaire pour l'analyse complète SonarQube
 
-      - name: Configurer Java 17
+      - name: Configurer Java 21 (requis par SonarQube Scanner 4.x)
         uses: actions/setup-java@v4
         with:
-          java-version: "17"
+          java-version: "21"
           distribution: "corretto"
           cache: maven
 
