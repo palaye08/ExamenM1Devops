@@ -2,12 +2,12 @@
 # Variables partagées par tous les hosts (non sensibles).
 
 # --- Application ---
-app_image: "VOTRE_DOCKERHUB_USERNAME/tp-devops-exam:latest"
+app_image: "palaye769/tp-devops-exam:latest"
 app_port: 8080
 
-# --- Domaine principal (ex: mondomaine.com) ---
-domain_name: "votredomaine.com"
-acme_email: "votre@email.com"
+# --- Domaine principal ---
+domain_name: "diopshop.duckdns.org"
+acme_email: "adioptp9@gmail.com"
 
 # --- SonarQube ---
 sonarqube_port: 9000
