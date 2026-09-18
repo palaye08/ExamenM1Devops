@@ -70,6 +70,17 @@ jobs:
           distribution: "corretto"
           cache: maven
 
+      - name: Debug - vérifier que SONAR_HOST_URL est défini
+        run: |
+          echo "Longueur de SONAR_HOST_URL : ${#SONAR_URL}"
+          if [ -z "$SONAR_URL" ]; then
+            echo "❌ ERREUR : Le secret SONAR_HOST_URL est VIDE. Vérifiez dans GitHub Settings → Secrets."
+            exit 1
+          fi
+          echo "✅ SONAR_HOST_URL est défini (${#SONAR_URL} caractères), commence par : ${SONAR_URL:0:8}..."
+        env:
+          SONAR_URL: ${{ secrets.SONAR_HOST_URL }}
+
       - name: Attendre que SonarQube soit prêt (status UP)
         run: |
           SONAR_URL="${{ secrets.SONAR_HOST_URL }}"
@@ -163,7 +174,7 @@ jobs:
               -e MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE="health,info,prometheus,metrics" \
               -e MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS="always" \
               --label "traefik.enable=true" \
-              --label "traefik.http.routers.app.rule=Host(\`app.${{ vars.DOMAIN_NAME }}\`)" \
+              --label "traefik.http.routers.app.rule=Host(\`app.diopshop.duckdns.org\`)" \
               --label "traefik.http.routers.app.entrypoints=websecure" \
               --label "traefik.http.routers.app.tls.certresolver=letsencrypt" \
               --label "traefik.http.services.app.loadbalancer.server.port=8080" \
