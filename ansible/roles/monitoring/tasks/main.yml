@@ -54,13 +54,49 @@
             - targets: ['sonarqube:9000']
   become: true
 
-- name: Créer le répertoire Grafana
+- name: Créer les répertoires Grafana (data + provisioning)
   ansible.builtin.file:
-    path: /opt/grafana/data
+    path: "{{ item }}"
     state: directory
-    owner: "472"   # UID Grafana
+    owner: "472"
     group: "472"
     mode: "0755"
+  loop:
+    - /opt/grafana/data
+    - /opt/grafana/provisioning/datasources
+    - /opt/grafana/provisioning/dashboards
+    - /opt/grafana/dashboards
+  become: true
+
+- name: Copier la datasource Prometheus + Loki
+  ansible.builtin.copy:
+    src: provisioning/datasources/datasource.yml
+    dest: /opt/grafana/provisioning/datasources/datasource.yml
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  become: true
+
+- name: Copier la configuration de provisioning des dashboards
+  ansible.builtin.copy:
+    src: provisioning/dashboards/dashboards.yml
+    dest: /opt/grafana/provisioning/dashboards/dashboards.yml
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  become: true
+
+- name: Copier les dashboards JSON
+  ansible.builtin.copy:
+    src: "dashboards/{{ item }}"
+    dest: "/opt/grafana/dashboards/{{ item }}"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  loop:
+    - node-exporter-full.json
+    - spring-boot-app.json
+    - production-dashboard.json
   become: true
 
 - name: Lancer Node Exporter (métriques système de l'instance)
@@ -112,10 +148,13 @@
       --network traefik-net \
       -p 3000:3000 \
       -v /opt/grafana/data:/var/lib/grafana \
+      -v /opt/grafana/provisioning:/etc/grafana/provisioning:ro \
+      -v /opt/grafana/dashboards:/var/lib/grafana/dashboards:ro \
       -e GF_SECURITY_ADMIN_USER="{{ grafana_admin_user }}" \
       -e GF_SECURITY_ADMIN_PASSWORD="Admin1234!" \
       -e GF_SERVER_DOMAIN="grafana.{{ domain_name }}" \
       -e GF_SERVER_ROOT_URL="https://grafana.{{ domain_name }}" \
+      -e GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH="/var/lib/grafana/dashboards/production-dashboard.json" \
       --label "traefik.enable=true" \
       --label "traefik.http.routers.grafana.rule=Host(\`grafana.{{ domain_name }}\`)" \
       --label "traefik.http.routers.grafana.entrypoints=websecure" \

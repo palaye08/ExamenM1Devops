@@ -1,7 +1,7 @@
 ---
 # Playbook principal - Exam DevOps
 # Configure une seule instance EC2 prod avec :
-# Docker, Traefik, SonarQube, Prometheus, Grafana + Application
+# Docker, Traefik, SonarQube, Prometheus, Grafana, Loki + Application
 
 # Étape 1 : Configuration commune (update + Docker)
 - name: Configuration commune - mise à jour système et installation Docker
@@ -31,7 +31,14 @@
   roles:
     - monitoring
 
-# Étape 5 : Déploiement de l'application
+# Étape 5 : Déploiement Loki + Promtail (agrégation de logs)
+- name: Déploiement Loki + Promtail (logs)
+  hosts: prod
+  become: true
+  roles:
+    - loki
+
+# Étape 6 : Déploiement de l'application
 - name: Déploiement de l'application
   hosts: prod
   become: true
