@@ -138,10 +138,23 @@
       --web.enable-lifecycle
   become: true
 
-- name: Lancer Grafana (visualisation des métriques - port 3000)
+- name: Arrêter et supprimer l'ancien conteneur Grafana (force recréation)
   ansible.builtin.shell: |
     docker stop grafana 2>/dev/null || true
-    docker rm grafana 2>/dev/null || true
+    docker rm -f grafana 2>/dev/null || true
+  become: true
+
+- name: Attendre que l'ancien conteneur Grafana soit bien supprimé
+  ansible.builtin.shell: |
+    for i in $(seq 1 10); do
+      docker ps -a --filter name=grafana --format '{{.Names}}' | grep -q grafana || exit 0
+      sleep 1
+    done
+    exit 1
+  become: true
+
+- name: Lancer Grafana avec provisioning as-code (dashboards + datasources)
+  ansible.builtin.shell: |
     docker run -d \
       --name grafana \
       --restart always \
@@ -163,6 +176,19 @@
       grafana/grafana:latest
   become: true
 
+- name: Attendre que Grafana soit prêt (API health)
+  ansible.builtin.shell: |
+    for i in $(seq 1 20); do
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health 2>/dev/null || echo "000")
+      echo "[Tentative $i/20] Grafana HTTP=$STATUS"
+      [ "$STATUS" = "200" ] && exit 0
+      sleep 3
+    done
+    echo "TIMEOUT: Grafana n'a pas répondu en 60s"
+    exit 1
+  become: true
+  changed_when: false
+
 - name: Vérifier que Prometheus est démarré
   ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' prometheus
   register: prom_status
@@ -173,13 +199,27 @@
   register: grafana_status
   changed_when: false
 
+- name: Santé finale Grafana (curl)
+  ansible.builtin.shell: curl -sf http://localhost:3000/api/health
+  register: grafana_health
+  changed_when: false
+  become: true
+
+- name: Santé finale Prometheus (curl)
+  ansible.builtin.shell: curl -sf http://localhost:9090/-/healthy
+  register: prom_health
+  changed_when: false
+  become: true
+
 - name: Afficher les statuts monitoring
   ansible.builtin.debug:
     msg: |
       Prometheus running: {{ prom_status.stdout }}
         -> http://{{ ansible_host }}:9090
+        -> Health: {{ prom_health.stdout }}
       Grafana running: {{ grafana_status.stdout }}
         -> http://{{ ansible_host }}:3000 (port direct)
         -> https://grafana.{{ domain_name }} (via Traefik + HTTPS)
-      Identifiants Grafana : {{ grafana_admin_user }} / [voir vault.yml]
-      Dashboard recommandé : Import ID 1860 (Node Exporter Full)
+        -> Health: {{ grafana_health.stdout }}
+      Identifiants Grafana : {{ grafana_admin_user }} / Admin1234!
+      Dashboards auto-provisionnés : EC2 Node Exporter / Spring Boot App / Production Overview

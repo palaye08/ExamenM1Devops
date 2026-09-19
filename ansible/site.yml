@@ -7,6 +7,7 @@
 - name: Configuration commune - mise à jour système et installation Docker
   hosts: prod
   become: true
+  tags: [common]
   roles:
     - common
 
@@ -14,6 +15,7 @@
 - name: Déploiement Traefik (reverse proxy + Let's Encrypt)
   hosts: prod
   become: true
+  tags: [traefik]
   roles:
     - traefik
 
@@ -21,6 +23,7 @@
 - name: Déploiement SonarQube (analyse qualité du code)
   hosts: prod
   become: true
+  tags: [sonarqube]
   roles:
     - sonarqube
 
@@ -28,6 +31,7 @@
 - name: Déploiement Prometheus et Grafana (monitoring)
   hosts: prod
   become: true
+  tags: [monitoring]
   roles:
     - monitoring
 
@@ -35,6 +39,7 @@
 - name: Déploiement Loki + Promtail (logs)
   hosts: prod
   become: true
+  tags: [loki]
   roles:
     - loki
 
@@ -42,5 +47,6 @@
 - name: Déploiement de l'application
   hosts: prod
   become: true
+  tags: [app]
   roles:
     - app

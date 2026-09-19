@@ -1,7 +1,7 @@
 ---
 # Rôle "loki" : Déploie Loki (agrégation de logs) + Promtail (collecteur Docker).
-# Loki écoute sur le port 3100 (accès interne réseau traefik-net uniquement).
-# Promtail collecte les logs de tous les conteneurs Docker via /var/log/docker.
+# Loki écoute sur le port 3100 ET expose https://loki.diopshop.duckdns.org via Traefik.
+# Promtail collecte les logs de tous les conteneurs Docker via /var/run/docker.sock.
 
 - name: Créer les répertoires Loki
   ansible.builtin.file:
@@ -65,10 +65,14 @@
         reject_old_samples_max_age: 168h
   become: true
 
-- name: Lancer Loki
+- name: Arrêter et supprimer l'ancien conteneur Loki (force recréation)
   ansible.builtin.shell: |
     docker stop loki 2>/dev/null || true
-    docker rm loki 2>/dev/null || true
+    docker rm -f loki 2>/dev/null || true
+  become: true
+
+- name: Lancer Loki avec labels Traefik
+  ansible.builtin.shell: |
     docker run -d \
       --name loki \
       --restart always \
@@ -76,6 +80,11 @@
       -p 3100:3100 \
       -v /opt/loki/data:/loki \
       -v /opt/loki/config/loki-config.yml:/etc/loki/local-config.yaml:ro \
+      --label "traefik.enable=true" \
+      --label "traefik.http.routers.loki.rule=Host(\`loki.diopshop.duckdns.org\`)" \
+      --label "traefik.http.routers.loki.entrypoints=websecure" \
+      --label "traefik.http.routers.loki.tls.certresolver=letsencrypt" \
+      --label "traefik.http.services.loki.loadbalancer.server.port=3100" \
       grafana/loki:latest \
       -config.file=/etc/loki/local-config.yaml
   become: true
@@ -117,10 +126,14 @@
               target_label: 'service'
   become: true
 
-- name: Lancer Promtail (collecte des logs Docker)
+- name: Arrêter et supprimer l'ancien conteneur Promtail (force recréation)
   ansible.builtin.shell: |
     docker stop promtail 2>/dev/null || true
-    docker rm promtail 2>/dev/null || true
+    docker rm -f promtail 2>/dev/null || true
+  become: true
+
+- name: Lancer Promtail (collecte des logs Docker)
+  ansible.builtin.shell: |
     docker run -d \
       --name promtail \
       --restart always \
@@ -132,6 +145,19 @@
       -config.file=/etc/promtail/config.yml
   become: true
 
+- name: Attendre que Loki soit prêt
+  ansible.builtin.shell: |
+    for i in $(seq 1 20); do
+      STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/ready 2>/dev/null || echo "000")
+      echo "[Tentative $i/20] Loki HTTP=$STATUS"
+      [ "$STATUS" = "200" ] && exit 0
+      sleep 3
+    done
+    echo "TIMEOUT: Loki n'a pas répondu en 60s"
+    exit 1
+  become: true
+  changed_when: false
+
 - name: Vérifier que Loki est démarré
   ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' loki
   register: loki_status
@@ -142,11 +168,19 @@
   register: promtail_status
   changed_when: false
 
+- name: Santé Loki (curl /ready)
+  ansible.builtin.shell: curl -sf http://localhost:3100/ready
+  register: loki_health
+  changed_when: false
+  become: true
+
 - name: Afficher les statuts Loki + Promtail
   ansible.builtin.debug:
     msg: |
       Loki running: {{ loki_status.stdout }}
-        -> http://{{ ansible_host }}:3100
-        -> Datasource Grafana : http://loki:3100
+        -> http://{{ ansible_host }}:3100 (port direct)
+        -> https://loki.diopshop.duckdns.org (via Traefik + HTTPS)
+        -> Ready: {{ loki_health.stdout }}
       Promtail running: {{ promtail_status.stdout }}
         -> Collecte les logs de tous les conteneurs Docker
+        -> Envoie vers Loki : http://loki:3100
